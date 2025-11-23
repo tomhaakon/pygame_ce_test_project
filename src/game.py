@@ -1,41 +1,37 @@
-#src/game.py
+# src\game.py
 import sys
+
 import pygame
 
-from .ecs import World, Position, Velocity, Renderable
+from .ecs import Position, Renderable, Velocity, World
+from .player import create_player
+
 
 class Game:
-    def __init__(self):
+    def __init__(self) -> None:
 
         pygame.init()
-        
-        self.width = 800
-        self.height = 600
 
-        self.screen = pygame.display.set_mode((self.width, self.height))
+        self.width: int = 800
+        self.height: int = 600
+
+        self.screen: pygame.Surface = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("pygame-ce testing")
 
-        self.clock = pygame.time.Clock()
-        self.running = False
-
+        self.clock: pygame.time.Clock = pygame.time.Clock()
+        self.running: bool = False
 
         self.world = World()
 
         # player entity testing
-        self.player = self.world.create_entity()
-        self.world.add_component(self.player, Position(self.width / 2, self.height / 2))
-        self.world.add_component(self.player, Velocity(0, 0))
-        self.world.add_component(self.player, 
-                                 Renderable(width=32, height=32, color=(0, 200, 0)),
-                                 )
-
+        self.player = create_player(self.world, self.width / 2, self.height / 2)
 
     def run(self):
         self.running = True
-        while self.running: 
-          
-            #fps 60
-            dt = self.clock.tick(60) / 1000
+        while self.running:
+
+            # fps 60
+            dt: int = self.clock.tick(60) / 1000
 
             self.handle_events()
             self.update(dt)
@@ -45,11 +41,11 @@ class Game:
 
     def handle_events(self):
         for event in pygame.event.get():
-            if(event.type == pygame.QUIT):
-               self.running = False
-        
+            if event.type == pygame.QUIT:
+                self.running = False
+
     def update(self, dt: float):
-        
+
         keys = pygame.key.get_pressed()
         speed = 200
 
@@ -64,7 +60,7 @@ class Game:
             vx = -speed
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
             vx = speed
-        
+
         if keys[pygame.K_ESCAPE]:
             self.running = False
 
@@ -73,24 +69,21 @@ class Game:
             vel.vx = vx
             vel.vy = vy
 
-        for eid, pos, vel in self.world.get_components(Position, Velocity):
+        for _, pos, vel in self.world.get_components(Position, Velocity):
             pos.x += vel.vx * dt
             pos.y += vel.vy * dt
 
     def draw(self):
 
-       self.screen.fill((30, 30, 30))
-                
-       for eid, pos, render in self.world.get_components(Position, Renderable):
-           rect = pygame.Rect(int(pos.x), int(pos.y), render.width, render.height)
-           pygame.draw.rect(self.screen, render.color, rect)
+        self.screen.fill((30, 30, 30))
 
+        for _, pos, render in self.world.get_components(Position, Renderable):
+            rect = pygame.Rect(int(pos.x), int(pos.y), render.width, render.height)
+            pygame.draw.rect(self.screen, render.color, rect)
 
-       pygame.display.flip()
+        pygame.display.flip()
 
     def quit(self):
         print("quit")
         pygame.quit()
         sys.exit()
-
-
