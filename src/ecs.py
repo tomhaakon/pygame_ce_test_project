@@ -46,6 +46,11 @@ class Input:
     # eller actions: dict[str, bool]
 
 
+@dataclass
+class Player:
+    id: int
+
+
 # -- world / ecs core
 
 
