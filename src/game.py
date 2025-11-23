@@ -3,7 +3,7 @@ import sys
 
 import pygame
 
-from .ecs import Position, Renderable, Velocity, World, PlayerControlled
+from .ecs import Position, Renderable, Velocity, World, PlayerControlled, Input
 from .player import create_player
 
 
@@ -49,34 +49,52 @@ class Game:
         keys = pygame.key.get_pressed()
         speed = 200
 
-        velocity_x = 0
-        velocity_y = 0
+        move_x = 0
+        move_y = 0
 
         if keys[pygame.K_w] or keys[pygame.K_UP]:
-            velocity_y = -speed
+            move_y = -1.0
         if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            velocity_y = speed
+            move_y = 1.0
         if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            velocity_x = -speed
+            move_x = -1.0
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            velocity_x = speed
+            move_x = 1.0
 
         if keys[pygame.K_ESCAPE]:
             self.running = False
 
+        # --------------------------
+        #
         # input system
-        # applies to any entity with velocity + PlayerControlled
-        # for entityid, velocity, playercontrolled
-        for entity_id, velocity, player_controlled in self.world.get_components(
-            Velocity, PlayerControlled
-        ):
-            velocity.vx = velocity_x
-            velocity.vy = velocity_y
+        #
+        # --------------------------
 
-        # movementsystem
-        for entity_id, position, velocity in self.world.get_components(
-            Position, Velocity
-        ):
+        for (
+            _entity_id,
+            input_component,
+            _player_controlled,
+        ) in self.world.get_components(Input, PlayerControlled):
+            input_component.move_x = move_x
+            input_component.move_y = move_y
+
+        # --------------------------
+        #
+        # movement system
+        #
+        # --------------------------
+        for (
+            _entity_id,
+            position,
+            velocity,
+            input_component,
+        ) in self.world.get_components(Position, Velocity, Input):
+
+            # konverter input (-1..1) til ekte velocity i pixel/per sek
+            velocity.vx = input_component.move_x * speed
+            velocity.vy = input_component.move_y * speed
+
+            # tilfør velocity til posisjon med delta time
             position.x += velocity.vx * delta_time
             position.y += velocity.vy * delta_time
 

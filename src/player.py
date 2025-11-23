@@ -1,5 +1,5 @@
 # player.py
-from .ecs import Position, Velocity, Renderable, World, PlayerControlled
+from .ecs import Position, Velocity, Renderable, World, PlayerControlled, Input
 
 
 def create_player(world: World, x: float, y: float) -> int:
@@ -10,4 +10,6 @@ def create_player(world: World, x: float, y: float) -> int:
     world.add_component(player, Velocity(0, 0))
     world.add_component(player, Renderable(32, 32, (0, 200, 0)))
     world.add_component(player, PlayerControlled())
+    world.add_component(player, Input())
+
     return player

@@ -31,6 +31,21 @@ class PlayerControlled:
     pass
 
 
+# Input komponenten lagrer resultatet av input
+# "hvilken direction vil denne entitien bevege seg i denne framen
+@dataclass
+class Input:
+    move_x: float = 0.0
+    move_y: float = 0.0
+    # senere:
+    # jump: bool
+    # attack: bool
+    # interact: bool
+    # aim_x: bool
+    # aim_y: bool
+    # eller actions: dict[str, bool]
+
+
 # -- world / ecs core
 
 
