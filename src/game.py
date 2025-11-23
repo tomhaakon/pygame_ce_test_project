@@ -3,8 +3,10 @@ import sys
 
 import pygame
 
-from .ecs import Position, Renderable, Velocity, World, PlayerControlled, Input
+from .ecs import Position, Renderable, World
 from .player import create_player
+from .systems.input_system import input_system
+from .systems.movement_system import movement_system
 
 
 class Game:
@@ -44,59 +46,31 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
 
-    def update(self, delta_time: float):
-
         keys = pygame.key.get_pressed()
-        speed = 200
-
-        move_x = 0
-        move_y = 0
-
-        if keys[pygame.K_w] or keys[pygame.K_UP]:
-            move_y = -1.0
-        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            move_y = 1.0
-        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            move_x = -1.0
-        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            move_x = 1.0
 
         if keys[pygame.K_ESCAPE]:
             self.running = False
 
-        # --------------------------
-        #
-        # input system
-        #
-        # --------------------------
+    """
+    --------------------------
 
-        for (
-            _entity_id,
-            input_component,
-            _player_controlled,
-        ) in self.world.get_components(Input, PlayerControlled):
-            input_component.move_x = move_x
-            input_component.move_y = move_y
+    ### - Updateloop
 
-        # --------------------------
-        #
-        # movement system
-        #
-        # --------------------------
-        for (
-            _entity_id,
-            position,
-            velocity,
-            input_component,
-        ) in self.world.get_components(Position, Velocity, Input):
+    --------------------------
+    """
 
-            # konverter input (-1..1) til ekte velocity i pixel/per sek
-            velocity.vx = input_component.move_x * speed
-            velocity.vy = input_component.move_y * speed
+    def update(self, delta_time: float):
 
-            # tilfør velocity til posisjon med delta time
-            position.x += velocity.vx * delta_time
-            position.y += velocity.vy * delta_time
+        input_system(self.world)
+        movement_system(self.world, delta_time)
+
+    """
+    --------------------------
+
+    ### - Render
+
+    --------------------------
+    """
 
     def draw(self):
 
