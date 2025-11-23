@@ -5,6 +5,8 @@
   "include": ["src"],
   "venvPath": ".",
   "venv": ".venv",
-  "typeCheckingMode": "off"
+  "typeCheckingMode": "off",
+  "reportUnusedVariable": "none",
+  "reportUnusedImport": "none"
 }
 

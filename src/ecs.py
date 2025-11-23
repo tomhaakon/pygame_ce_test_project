@@ -1,8 +1,9 @@
-# src/ecs.py 
+# src/ecs.py
 from dataclasses import dataclass
 
 
 # -- components
+
 
 @dataclass
 class Position:
@@ -10,10 +11,11 @@ class Position:
     y: float
 
 
-@dataclass 
+@dataclass
 class Velocity:
     vx: float
     vy: float
+
 
 @dataclass
 class Renderable:
@@ -22,14 +24,20 @@ class Renderable:
     color: tuple[int, int, int]
 
 
+@dataclass
+class PlayerControlled:
+    """This is a tag that is saying this entity should only respond to player input"""
+
+    pass
+
 
 # -- world / ecs core
+
 
 class World:
     def __init__(self) -> None:
         self._next_entity_id: int = 0
         self._components: dict[type, dict[int, object]] = {}
-
 
     # -- entities
     def create_entity(self) -> int:
@@ -46,25 +54,25 @@ class World:
     def get_component(self, entity: int, comp_type: type):
         return self._components.get(comp_type, {}).get(entity)
 
-    
-    def get_components(self, *comp_types: type):
+    def get_components(self, *component_types: type):
 
-        if not comp_types:
+        if not component_types:
             return
 
-        comp_dicts = []
-        for t in comp_types:
-            d = self._components.get(t)
-            if not d:
+        component_maps = []
+
+        for component_type in component_types:
+            component_dict = self._components.get(component_type)
+            if not component_dict:
                 return
-            comp_dicts.append(d)
+            component_maps.append(component_dict)
 
+        common_entity_ids = set(component_maps[0].keys())
+        for component_dict in component_maps[1:]:
+            common_entity_ids &= set(component_dict.keys())
 
-        common_ids = set(comp_dicts[0].keys())
-        for d in comp_dicts[1:]:
-            common_ids &= set(d.keys())
-
-        for entity_id in common_ids:
-            yield (entity_id, *(d[entity_id] for d in comp_dicts))
-
-
+        for entity_id in common_entity_ids:
+            components = tuple(
+                component_dict[entity_id] for component_dict in component_maps
+            )
+            yield (entity_id, *components)
