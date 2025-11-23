@@ -31,7 +31,11 @@ class Game:
         )
 
         self.player2 = create_player(
-            self.world, self.width / 3, self.height / 2, player_id=2, color=(200, 0, 0)
+            self.world,
+            2 * self.width / 3,
+            self.height / 2,
+            player_id=2,
+            color=(200, 0, 0),
         )
 
     def run(self):
