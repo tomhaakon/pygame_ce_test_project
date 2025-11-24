@@ -31,6 +31,13 @@ class Game:
         # mapping from player_id -> entity_id in this client's world
         self.player_entities: dict[int, int] = {}
 
+        # -- chat
+        self.chat_active: bool = False
+        self.chat_text: str = ""
+        self.chat_log: list[str] = []
+
+        self.font = pygame.font.Font(None, 24)
+
         # Networking
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print(f"Client: connecting to {HOST}:{PORT}...")
@@ -56,23 +63,66 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
 
+            elif event.type == pygame.KEYDOWN:
+                # Esc always quits game
+                if event.key == pygame.K_ESCAPE and not self.chat_active:
+                    self.running = False
+
+                elif event.key == pygame.K_RETURN:
+                    if self.chat_active:
+                        # send msg
+                        text = self.chat_text.strip()
+                        if text:
+                            chat_msg = {
+                                "type": "chat",
+                                "text": text,
+                            }
+                            try:
+                                self.sock.sendall(
+                                    (json.dumps(chat_msg) + "\n").encode("utf-8")
+                                )
+                            except (BrokenPipeError, ConnectionResetError, OSError):
+                                print("Client: lost connection while sending chat")
+                                self.running = False
+                                return
+
+                        self.chat_text = ""
+                        self.chat_active = False
+
+                    else:
+                        # start typing
+                        self.chat_active = True
+                        self.chat_text = ""
+
+                # backspakce or edit chat
+                elif self.chat_active and event.key == pygame.K_BACKSPACE:
+                    self.chat_text = self.chat_text[:-1]
+
+                # regular character input
+                elif self.chat_active:
+                    # event.unicode is typed character
+                    if event.unicode.isprintable():
+                        self.chat_text += event.unicode
+
     def update(self, dt: float):
         # 1. Read local keyboard movement intent
         keys = pygame.key.get_pressed()
         move_x = 0.0
         move_y = 0.0
 
-        if keys[pygame.K_w]:
-            move_y = -1.0
-        if keys[pygame.K_s]:
-            move_y = 1.0
-        if keys[pygame.K_a]:
-            move_x = -1.0
-        if keys[pygame.K_d]:
-            move_x = 1.0
+        if not self.chat_active:
 
-        if keys[pygame.K_ESCAPE]:
-            self.running = False
+            if keys[pygame.K_w]:
+                move_y = -1.0
+            if keys[pygame.K_s]:
+                move_y = 1.0
+            if keys[pygame.K_a]:
+                move_x = -1.0
+            if keys[pygame.K_d]:
+                move_x = 1.0
+
+            if keys[pygame.K_ESCAPE]:
+                self.running = False
 
         # 2. Send input to server
         input_msg = {
@@ -153,12 +203,35 @@ class Game:
                     self.world.destroy_entity(entity)
                     del self.player_entities[pid]
 
+        elif msg_type == "chat":
+            sender = msg.get("from")
+            text = msg.get("text", "")
+            line = f"{sender}: {text}"
+            print("CHAT:", line)  # console too
+            self.chat_log.append(line)
+            # keep 10 last msg
+            self.chat_log = self.chat_log[-10:]
+
     def draw(self):
         self.screen.fill((30, 30, 30))
 
         for _, pos, rend in self.world.get_components(Position, Renderable):
             rect = pygame.Rect(int(pos.x), int(pos.y), rend.width, rend.height)
             pygame.draw.rect(self.screen, rend.color, rect)
+
+        # draw chat log
+        y = self.height - 40
+        for line in reversed(self.chat_log):
+            surf = self.font.render(line, True, (255, 255, 255))
+            self.screen.blit(surf, (10, y))
+            y -= 20
+            if y < 0:
+                break
+
+        # draw current chat input
+        if self.chat_active:
+            input_surf = self.font.render("> " + self.chat_text, True, (0, 255, 0))
+            self.screen.blit(input_surf, (10, self.height - 20))
 
         pygame.display.flip()
 

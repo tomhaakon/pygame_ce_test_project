@@ -21,11 +21,13 @@ SERVER_RUNNING = True
 def console_listener():
     global SERVER_RUNNING
     while SERVER_RUNNING:
-        cmd = input("").strip().lower()
+        cmd = input("[server]:").strip().lower()
         if cmd in ("quit", "exit", "stop", "shutdown"):
             print("Server: shutdown command received.")
             SERVER_RUNNING = False
             break
+        if cmd in ("help"):
+            print("You dont get any help, twathole")
 
 
 def main():
@@ -37,8 +39,6 @@ def main():
     clients: list[dict] = []
     next_player_id = 1
 
-    threading.Thread(target=console_listener, daemon=True).start()
-
     print("Server: world initialized!")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
@@ -47,6 +47,8 @@ def main():
         server_sock.listen()
         server_sock.setblocking(False)  # non-blocking accept
         print(f"Server: listening on {HOST}:{PORT}")
+
+        threading.Thread(target=console_listener, daemon=True).start()
 
         while SERVER_RUNNING:
             frame_start = time.time()
@@ -113,6 +115,8 @@ def main():
                         if not line:
                             continue
                         msg = json.loads(line.decode("utf-8"))
+                        msg_type = msg.get("type")
+
                         if msg.get("type") == "input":
                             move_x = float(msg.get("move_x", 0.0))
                             move_y = float(msg.get("move_y", 0.0))
@@ -121,6 +125,31 @@ def main():
                             if input_comp is not None:
                                 input_comp.move_x = move_x
                                 input_comp.move_y = move_y
+
+                        elif msg_type == "chat":
+                            text = str(msg.get("text", "")).strip()
+                            if text:
+                                sender_id = client["player_id"]
+                                chat_msg = {
+                                    "type": "chat",
+                                    "from": sender_id,
+                                    "text": text,
+                                }
+                                chat_bytes = (json.dumps(chat_msg) + "\n").encode(
+                                    "utf-8"
+                                )
+
+                                for other in clients:
+                                    try:
+                                        other["conn"].sendall(chat_bytes)
+
+                                    except (
+                                        ConnectionResetError,
+                                        BrokenPipeError,
+                                        ConnectionAbortedError,
+                                        OSError,
+                                    ):
+                                        disconnected_clients.append(other)
 
                 except BlockingIOError:
                     # no data this frame for this client
