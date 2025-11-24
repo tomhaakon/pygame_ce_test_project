@@ -96,3 +96,7 @@ class World:
                 component_dict[entity_id] for component_dict in component_maps
             )
             yield (entity_id, *components)
+
+    def destroy_entity(self, entity: int) -> None:
+        for comp_dict in self._components.values():
+            comp_dict.pop(entity, None)

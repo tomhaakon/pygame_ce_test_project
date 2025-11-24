@@ -33,101 +33,167 @@ def main():
 
     world = World()
 
-    player_entity = create_player(world, 400, 300, player_id=1)
+    # Each client: { "conn", "addr", "player_id", "entity", "buffer" }
+    clients: list[dict] = []
+    next_player_id = 1
 
     threading.Thread(target=console_listener, daemon=True).start()
 
-    print("Server: world initalized!")
+    print("Server: world initialized!")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
         server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_sock.bind((HOST, PORT))
-        server_sock.listen(1)
-        server_sock.settimeout(1.0)
+        server_sock.listen()
+        server_sock.setblocking(False)  # non-blocking accept
         print(f"Server: listening on {HOST}:{PORT}")
 
-        print("Server: waiting for a client...")
+        while SERVER_RUNNING:
+            frame_start = time.time()
 
-        while SERVER_RUNNING:  # outer loop: accept new clients
-
+            # --- 1. Accept new clients (non-blocking) ---
             try:
                 conn, addr = server_sock.accept()
+            except BlockingIOError:
+                conn = None
 
-            except socket.timeout:
-                # check shutdown flag occasionally
-                continue
+            if conn is not None:
+                conn.setblocking(False)
+                player_id = next_player_id
+                next_player_id += 1
 
-            print(f"Server: cleint connected from {addr}")
+                # simple spawn position by id
+                spawn_x = 200 + (player_id - 1) * 100
+                spawn_y = 300
 
-            with conn:
-                conn.settimeout(1.0)
-                running = True
-                recv_buffer = b""
+                color = (0, 200, 0) if player_id == 1 else (200, 0, 0)
 
-                while running and SERVER_RUNNING:
-                    frame_start = time.time()
+                entity = create_player(
+                    world, spawn_x, spawn_y, player_id=player_id, color=color
+                )
 
-                    # ----1. Recieve any input messages from client ---
+                client_info = {
+                    "conn": conn,
+                    "addr": addr,
+                    "player_id": player_id,
+                    "entity": entity,
+                    "buffer": b"",
+                }
+                clients.append(client_info)
 
-                    try:
-                        data = conn.recv(4096)
-                        if not data:
-                            print("Server: client disonnected (empty recv)")
-                            break
+                print(f"Server: client {player_id} connected from {addr}")
 
-                        recv_buffer += data
+                # send welcome message with player_id
+                welcome_msg = {"type": "welcome", "player_id": player_id}
+                try:
+                    conn.sendall((json.dumps(welcome_msg) + "\n").encode("utf-8"))
+                except OSError:
+                    print(f"Server: failed to send welcome to {addr}")
 
-                        # process all complete lines (newline-delimited JSON)
-                        while b"\n" in recv_buffer:
-                            line, recv_buffer = recv_buffer.split(b"\n", 1)
-                            if not line:
-                                continue
-                            msg = json.loads(line.decode("utf-8"))
-                            if msg.get("type") == "input":
-                                move_x = float(msg.get("move_x", 0.0))
-                                move_y = float(msg.get("move_y", 0.0))
+            # --- 2. Receive input from each client ---
+            disconnected_clients: list[dict] = []
 
-                                input_comp = world.get_component(player_entity, Input)
-                                if input_comp is not None:
-                                    input_comp.move_x = move_x
-                                    input_comp.move_y = move_y
+            for client in clients:
+                conn = client["conn"]
+                entity = client["entity"]
 
-                    except socket.timeout:
-                        pass
+                try:
+                    data = conn.recv(4096)
+                    if not data:
+                        print(
+                            f"Server: client {client['player_id']} disconnected (empty recv)"
+                        )
+                        disconnected_clients.append(client)
+                        continue
 
-                    except (
-                        ConnectionResetError,
-                        ConnectionAbortedError,
-                        BrokenPipeError,
-                    ):
-                        print("Server: client disconnected (exception)")
-                        break
-                    if not SERVER_RUNNING:
-                        break
+                    client["buffer"] += data
 
-                    # --- 2 Run ECS Tick on the server ---
-                    movement_system(world, DT)
+                    while b"\n" in client["buffer"]:
+                        line, client["buffer"] = client["buffer"].split(b"\n", 1)
+                        if not line:
+                            continue
+                        msg = json.loads(line.decode("utf-8"))
+                        if msg.get("type") == "input":
+                            move_x = float(msg.get("move_x", 0.0))
+                            move_y = float(msg.get("move_y", 0.0))
 
-                    # --- 3 Send back the players positino
-                    pos = world.get_component(player_entity, Position)
-                    if pos is not None:
-                        state_msg = {
-                            "type": "state",
-                            "x": pos.x,
-                            "y": pos.y,
-                        }
-                        try:
-                            conn.sendall((json.dumps(state_msg) + "\n").encode("utf-8"))
-                        except (ConnectionResetError, BrokenPipeError):
-                            print("Server: client disonnection while sending state")
-                            break
+                            input_comp = world.get_component(entity, Input)
+                            if input_comp is not None:
+                                input_comp.move_x = move_x
+                                input_comp.move_y = move_y
 
-                    # --- 4 Sleep to maintain tick rate --
+                except BlockingIOError:
+                    # no data this frame for this client
+                    pass
+                except (
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                    BrokenPipeError,
+                    OSError,
+                ):
+                    print(
+                        f"Server: client {client['player_id']} disconnected (exception)"
+                    )
+                    disconnected_clients.append(client)
 
-                    elapsed = time.time() - frame_start
-                    sleep_time = DT - elapsed
-                    if sleep_time > 0:
-                        time.sleep(sleep_time)
+            # --- 3. Remove disconnected clients ---
+            for client in disconnected_clients:
+                try:
+                    client["conn"].close()
+                except OSError:
+                    pass
+                if client in clients:
+                    clients.remove(client)
+
+            if not SERVER_RUNNING:
+                break
+
+            # --- 4. Run ECS tick ---
+            movement_system(world, DT)
+
+            # --- 5. Build state of all players ---
+            players_state = []
+            for client in clients:
+                entity = client["entity"]
+                player_id = client["player_id"]
+                pos = world.get_component(entity, Position)
+                if pos is not None:
+                    players_state.append({"id": player_id, "x": pos.x, "y": pos.y})
+
+            state_msg = {"type": "state", "players": players_state}
+            state_bytes = (json.dumps(state_msg) + "\n").encode("utf-8")
+
+            # --- 6. Send state to all clients ---
+            disconnected_clients = []
+            for client in clients:
+                try:
+                    client["conn"].sendall(state_bytes)
+                except (
+                    ConnectionResetError,
+                    BrokenPipeError,
+                    ConnectionAbortedError,
+                    OSError,
+                ):
+                    print(
+                        f"Server: client {client['player_id']} disconnected while sending state"
+                    )
+                    disconnected_clients.append(client)
+
+            for client in disconnected_clients:
+                try:
+                    client["conn"].close()
+                except OSError:
+                    pass
+                if client in clients:
+                    clients.remove(client)
+
+            # --- 7. Sleep to maintain tickrate ---
+            elapsed = time.time() - frame_start
+            sleep_time = DT - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+    print("Server: shutting down")
 
 
 if __name__ == "__main__":

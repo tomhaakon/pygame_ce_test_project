@@ -1,4 +1,4 @@
-# client/cleint_main.py
+# client/client_main.py
 
 import sys
 import json
@@ -27,17 +27,19 @@ class Game:
 
         # local ECS world used only for rendering
         self.world = World()
-        self.player_entity = create_player(
-            self.world, self.width / 2, self.height / 2, player_id=1
-        )
+
+        # mapping from player_id -> entity_id in this client's world
+        self.player_entities: dict[int, int] = {}
 
         # Networking
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(f"Client: connection to {HOST}:{PORT}...")
+        print(f"Client: connecting to {HOST}:{PORT}...")
         self.sock.connect((HOST, PORT))
         self.sock.setblocking(False)
+        print("Client: connected!")
 
         self.recv_buffer = b""
+        self.player_id: int | None = None
 
     def run(self):
         self.running = True
@@ -47,7 +49,7 @@ class Game:
             self.update(dt)
             self.draw()
 
-        sys.exit()
+        self.quit()
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -55,7 +57,7 @@ class Game:
                 self.running = False
 
     def update(self, dt: float):
-        # 1 Read local keyboard - movement intent
+        # 1. Read local keyboard movement intent
         keys = pygame.key.get_pressed()
         move_x = 0.0
         move_y = 0.0
@@ -81,35 +83,75 @@ class Game:
 
         try:
             self.sock.sendall((json.dumps(input_msg) + "\n").encode("utf-8"))
-
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, OSError):
             print("Client: lost connection to server")
             self.running = False
             return
 
-        # 3. revice state updates from servre and apply to loccal ECS
-
+        # 3. Receive state updates from server and apply to local ECS
         try:
-
-            data = self.sock.recv(4006)
+            data = self.sock.recv(4096)
             if data:
                 self.recv_buffer += data
+
                 # process any complete lines
                 while b"\n" in self.recv_buffer:
                     line, self.recv_buffer = self.recv_buffer.split(b"\n", 1)
                     if not line:
                         continue
                     msg = json.loads(line.decode("utf-8"))
-                    if msg.get("type") == "state":
-                        x = float(msg["x"])
-                        y = float(msg["y"])
-                        pos = self.world.get_component(self.player_entity, Position)
-                        if pos is not None:
-                            pos.x = x
-                            pos.y = y
+                    self.handle_message(msg)
+
         except BlockingIOError:
-            # no data this frame move on
+            # no data this frame
             pass
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            print("Client: server disconnected")
+            self.running = False
+            return
+
+    def handle_message(self, msg: dict):
+        msg_type = msg.get("type")
+
+        if msg_type == "welcome":
+            # server assigns us a player_id
+            self.player_id = int(msg["player_id"])
+            print(f"Client: my player_id = {self.player_id}")
+
+        elif msg_type == "state":
+            players = msg.get("players", [])
+
+            seen_ids: set[int] = set()
+
+            for p in players:
+                pid = int(p["id"])
+                x = float(p["x"])
+                y = float(p["y"])
+
+                seen_ids.add(pid)
+
+                # if we don't know this player yet, create local entity
+                if pid not in self.player_entities:
+                    if self.player_id is not None and pid == self.player_id:
+                        color = (0, 200, 0)  # me = green
+                    else:
+                        color = (200, 0, 0)  # others = red
+
+                    entity = create_player(self.world, x, y, player_id=pid, color=color)
+                    self.player_entities[pid] = entity
+
+                entity = self.player_entities[pid]
+                pos = self.world.get_component(entity, Position)
+                if pos is not None:
+                    pos.x = x
+                    pos.y = y
+
+            # despawn players that no longer is connected
+            for pid in list(self.player_entities.keys()):
+                if pid not in seen_ids:
+                    entity = self.player_entities[pid]
+                    self.world.destroy_entity(entity)
+                    del self.player_entities[pid]
 
     def draw(self):
         self.screen.fill((30, 30, 30))
@@ -123,10 +165,9 @@ class Game:
     def quit(self):
         print("Client: quitting")
         try:
-            self.slock.close()
+            self.sock.close()
         except Exception:
             pass
-
         pygame.quit()
         sys.exit()
 
