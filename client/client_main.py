@@ -299,7 +299,14 @@ class Game:
                     break
 
             if player_id is not None:
-                label_surface = self.font.render(str(player_id), True, (255, 255, 255))
+
+                if pid == self.player_id:
+                    color = (0, 255, 0)
+                else:
+                    color = (255, 255, 255)
+
+                label_surface = self.font.render(str(player_id), True, color)
+
                 label_x = screen_x + rend.width // 2 - label_surface.get_width() // 2
                 label_y = screen_y - label_surface.get_height() - 2  # above player
                 self.screen.blit(label_surface, (label_x, label_y))
