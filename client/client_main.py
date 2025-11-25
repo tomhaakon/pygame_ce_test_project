@@ -280,12 +280,29 @@ class Game:
 
         # --- draw players / entities
 
-        for _, pos, rend in self.world.get_components(Position, Renderable):
+        for entity_id, pos, rend in self.world.get_components(Position, Renderable):
+
+            # convert world to screen
             screen_x = int(pos.x - self.camera_x)
             screen_y = int(pos.y - self.camera_y)
 
+            # draw squere
             rect = pygame.Rect(screen_x, screen_y, rend.width, rend.height)
             pygame.draw.rect(self.screen, rend.color, rect)
+
+            # draw player id label
+            # find wich player_id this entity belongs to
+            player_id = None
+            for pid, ent in self.player_entities.items():
+                if ent == entity_id:
+                    player_id = pid
+                    break
+
+            if player_id is not None:
+                label_surface = self.font.render(str(player_id), True, (255, 255, 255))
+                label_x = screen_x + rend.width // 2 - label_surface.get_width() // 2
+                label_y = screen_y - label_surface.get_height() - 2  # above player
+                self.screen.blit(label_surface, (label_x, label_y))
 
         # draw chat log
         y = self.height - 40
