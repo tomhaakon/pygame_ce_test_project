@@ -7,6 +7,7 @@ from .ecs import (
     PlayerControlled,
     Input,
     Player,
+    Health,
 )
 
 
@@ -22,5 +23,6 @@ def create_player(
     world.add_component(player, PlayerControlled())
     world.add_component(player, Input())
     world.add_component(player, Player(player_id))
+    world.add_component(player, Health(current=100, maximum=100))
 
     return player

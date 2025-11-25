@@ -5,7 +5,7 @@ import json
 import socket
 import threading
 
-from shared.ecs import World, Position, Input, WorldConfig
+from shared.ecs import World, Position, Input, WorldConfig, Health
 from shared.player import create_player
 from shared.systems.movement_system import movement_system
 
@@ -196,8 +196,16 @@ def main():
                 entity = client["entity"]
                 player_id = client["player_id"]
                 pos = world.get_component(entity, Position)
+                health = world.get_component(entity, Health)
+
                 if pos is not None:
-                    players_state.append({"id": player_id, "x": pos.x, "y": pos.y})
+                    player_data = {"id": player_id, "x": pos.x, "y": pos.y}
+
+                    if health is not None:
+                        player_data["hp"] = health.current
+                        player_data["hp_max"] = health.maximum
+
+                    players_state.append(player_data)
 
             state_msg = {"type": "state", "players": players_state}
             state_bytes = (json.dumps(state_msg) + "\n").encode("utf-8")

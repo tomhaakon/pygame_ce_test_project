@@ -61,6 +61,12 @@ class WorldConfig:
     tile_size: int = 32
 
 
+@dataclass
+class Health:
+    current: int
+    maximum: int
+
+
 # -- world / ecs core
 
 

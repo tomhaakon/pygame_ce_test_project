@@ -1,12 +1,11 @@
 # client/client_main.py
-
 import sys
 import json
 import socket
 
 import pygame
 
-from shared.ecs import World, Position, Renderable
+from shared.ecs import World, Position, Renderable, Health
 from shared.player import create_player
 
 HOST = "127.0.0.1"
@@ -20,7 +19,7 @@ class Game:
         self.width = 800
         self.height = 600
         self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Client")
+        pygame.display.set_caption("pygame-ce-test-project")
 
         self.camera_x = 0.0
         self.camera_y = 0.0
@@ -195,6 +194,9 @@ class Game:
                 x = float(p["x"])
                 y = float(p["y"])
 
+                hp = int(p.get("hp", 100))
+                hp_max = int(p.get("hp_max", 100))
+
                 seen_ids.add(pid)
 
                 # if we don't know this player yet, create local entity
@@ -219,6 +221,12 @@ class Game:
                     # camera
                     self.camera_x = pos.x - self.width / 2
                     self.camera_y = pos.y - self.height / 2
+
+            # update / sync health
+            health = self.world.get_component(entity, Health)
+            if health is not None:
+                health.current = hp
+                health.maximum = hp_max
 
             # despawn players that no longer is connected
             for pid in list(self.player_entities.keys()):
@@ -297,6 +305,29 @@ class Game:
                 if ent == entity_id:
                     player_id = pid
                     break
+
+            # -- health bar
+            health = self.world.get_component(entity_id, Health)
+            if health is not None:
+                if player_id == self.player_id:
+                    continue
+
+                bar_width = rend.width
+                bar_height = 4
+                bar_x = screen_x
+                bar_y = screen_y - bar_height - 2
+
+                # background
+                bg_rect = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
+                pygame.draw.rect(self.screen, (60, 0, 0), bg_rect)
+
+                # foreground (clamped)
+                ratio = 0.0
+                if health.maximum > 0:
+                    ratio = max(0.0, min(1.0, health.current / health.maximum))
+                fg_width = int(bar_width * ratio)
+                fg_rect = pygame.Rect(bar_x, bar_y, fg_width, bar_height)
+                pygame.draw.rect(self.screen, (0, 200, 0), fg_rect)
 
             if player_id is not None:
 
