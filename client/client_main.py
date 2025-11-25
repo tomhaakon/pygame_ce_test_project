@@ -28,6 +28,9 @@ class Game:
         self.world_width = None
         self.world_height = None
 
+        self.show_grid: bool = False
+        self.tile_size: int = 32
+
         self.clock = pygame.time.Clock()
         self.running = False
 
@@ -73,6 +76,9 @@ class Game:
                 # Esc always quits game
                 if event.key == pygame.K_ESCAPE and not self.chat_active:
                     self.running = False
+
+                elif event.key == pygame.K_g and not self.chat_active:
+                    self.show_grid = not self.show_grid
 
                 elif event.key == pygame.K_RETURN:
                     if self.chat_active:
@@ -205,7 +211,6 @@ class Game:
                 pos = self.world.get_component(entity, Position)
 
                 if pos is not None:
-
                     # positino
                     pos.x = x
                     pos.y = y
@@ -244,6 +249,34 @@ class Game:
             )
 
             pygame.draw.rect(self.screen, (80, 80, 80), border_rect, width=2)
+
+        # -- draw tile grid (debug)
+        if self.show_grid:
+            # vertical lines
+            x = 0
+            while x <= self.world_width:
+                sx = int(x - self.camera_x)
+                pygame.draw.line(
+                    self.screen,
+                    (60, 60, 60),
+                    (sx, int(0 - self.camera_y)),
+                    (sx, int(self.world_height - self.camera_y)),
+                    1,
+                )
+                x += self.tile_size
+
+            # horizontal lines
+            y = 0
+            while y <= self.world_height:
+                sy = int(y - self.camera_y)
+                pygame.draw.line(
+                    self.screen,
+                    (60, 60, 60),
+                    (int(0 - self.camera_x), sy),
+                    (int(self.world_width - self.camera_x), sy),
+                    1,
+                )
+                y += self.tile_size
 
         # --- draw players / entities
 
