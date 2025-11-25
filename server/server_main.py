@@ -5,7 +5,7 @@ import json
 import socket
 import threading
 
-from shared.ecs import World, Position, Input
+from shared.ecs import World, Position, Input, WorldConfig
 from shared.player import create_player
 from shared.systems.movement_system import movement_system
 
@@ -27,14 +27,14 @@ def console_listener():
             SERVER_RUNNING = False
             break
         if cmd in ("help"):
-            print("You dont get any help, twathole")
+            print("to shutdown server use 'quit, exit, stop or shutdown'")
 
 
 def main():
     global SERVER_RUNNING
 
     world = World()
-
+    world.set_resource(WorldConfig(width=500.0, height=500.0, tile_size=32))
     # Each client: { "conn", "addr", "player_id", "entity", "buffer" }
     clients: list[dict] = []
     next_player_id = 1
@@ -47,6 +47,7 @@ def main():
         server_sock.listen()
         server_sock.setblocking(False)  # non-blocking accept
         print(f"Server: listening on {HOST}:{PORT}")
+        print("type help for info")
 
         threading.Thread(target=console_listener, daemon=True).start()
 
@@ -64,9 +65,12 @@ def main():
                 player_id = next_player_id
                 next_player_id += 1
 
-                # simple spawn position by id
-                spawn_x = 200 + (player_id - 1) * 100
-                spawn_y = 300
+                cfg = world.get_resource(WorldConfig)
+                tile_size = cfg.tile_size if cfg is not None else 32
+
+                tile_x, tile_y = 10, 15
+                spawn_x = tile_x * tile_size
+                spawn_y = tile_y * tile_size
 
                 color = (0, 200, 0) if player_id == 1 else (200, 0, 0)
 
@@ -81,12 +85,18 @@ def main():
                     "entity": entity,
                     "buffer": b"",
                 }
+
                 clients.append(client_info)
 
                 print(f"Server: client {player_id} connected from {addr}")
 
                 # send welcome message with player_id
-                welcome_msg = {"type": "welcome", "player_id": player_id}
+                welcome_msg = {
+                    "type": "welcome",
+                    "player_id": player_id,
+                    "world_width": cfg.width if cfg else None,
+                    "world_height": cfg.height if cfg else None,
+                }
                 try:
                     conn.sendall((json.dumps(welcome_msg) + "\n").encode("utf-8"))
                 except OSError:

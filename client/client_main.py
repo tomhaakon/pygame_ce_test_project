@@ -22,6 +22,12 @@ class Game:
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Client")
 
+        self.camera_x = 0.0
+        self.camera_y = 0.0
+
+        self.world_width = None
+        self.world_height = None
+
         self.clock = pygame.time.Clock()
         self.running = False
 
@@ -166,7 +172,12 @@ class Game:
         if msg_type == "welcome":
             # server assigns us a player_id
             self.player_id = int(msg["player_id"])
-            print(f"Client: my player_id = {self.player_id}")
+            self.world_width = msg.get("world_width")
+            self.world_height = msg.get("world_height")
+
+            print(
+                f"Client: my player_id = {self.player_id}, world = {self.world_width}x{self.world_height}"
+            )
 
         elif msg_type == "state":
             players = msg.get("players", [])
@@ -192,9 +203,17 @@ class Game:
 
                 entity = self.player_entities[pid]
                 pos = self.world.get_component(entity, Position)
+
                 if pos is not None:
+
+                    # positino
                     pos.x = x
                     pos.y = y
+
+                if self.player_id is not None and pid == self.player_id:
+                    # camera
+                    self.camera_x = pos.x - self.width / 2
+                    self.camera_y = pos.y - self.height / 2
 
             # despawn players that no longer is connected
             for pid in list(self.player_entities.keys()):
@@ -215,8 +234,24 @@ class Game:
     def draw(self):
         self.screen.fill((30, 30, 30))
 
+        # draw world border ( same size as window; adapt if different)
+        if self.world_width is not None and self.world_height is not None:
+            border_x = int(0 - self.camera_x)
+            border_y = int(0 - self.camera_y)
+
+            border_rect = pygame.Rect(
+                border_x, border_y, self.world_width, self.world_height
+            )
+
+            pygame.draw.rect(self.screen, (80, 80, 80), border_rect, width=2)
+
+        # --- draw players / entities
+
         for _, pos, rend in self.world.get_components(Position, Renderable):
-            rect = pygame.Rect(int(pos.x), int(pos.y), rend.width, rend.height)
+            screen_x = int(pos.x - self.camera_x)
+            screen_y = int(pos.y - self.camera_y)
+
+            rect = pygame.Rect(screen_x, screen_y, rend.width, rend.height)
             pygame.draw.rect(self.screen, rend.color, rect)
 
         # draw chat log

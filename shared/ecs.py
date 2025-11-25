@@ -1,5 +1,8 @@
 # src/ecs.py
 from dataclasses import dataclass
+from typing import TypeVar, Type, Optional, Any
+
+T = TypeVar("T")
 
 
 # -- components
@@ -51,6 +54,13 @@ class Player:
     id: int
 
 
+@dataclass
+class WorldConfig:
+    width: float
+    height: float
+    tile_size: int = 32
+
+
 # -- world / ecs core
 
 
@@ -58,6 +68,7 @@ class World:
     def __init__(self) -> None:
         self._next_entity_id: int = 0
         self._components: dict[type, dict[int, object]] = {}
+        self._resources: dict[type, object] = {}
 
     # -- entities
     def create_entity(self) -> int:
@@ -100,3 +111,10 @@ class World:
     def destroy_entity(self, entity: int) -> None:
         for comp_dict in self._components.values():
             comp_dict.pop(entity, None)
+
+    def set_resource(self, resource: object) -> None:
+        self._resources[type(resource)] = resource
+
+    def get_resource(self, resource_type: Type[T]) -> Optional[T]:
+        res = self._resources.get(resource_type)
+        return res if isinstance(res, resource_type) else None
